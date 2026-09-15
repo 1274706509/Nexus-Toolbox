@@ -10,8 +10,8 @@
 // @match        https://crm.goodwe.com:2001/*
 // @run-at       document-idle
 // @grant        none
-// @updateURL    https://cdn.jsdelivr.net/gh1274706509/Nexus-Toolbox@main/Nexus-Toolbox.meta.js
-// @downloadURL  https://cdn.jsdelivr.net/gh1274706509/Nexus-Toolbox@main/Nexus-Toolbox.user.js
+// @updateURL    https://cdn.jsdelivr.net/gh/1274706509/Nexus-Toolbox@main/Nexus-Toolbox.meta.js
+// @downloadURL  https://cdn.jsdelivr.net/gh/1274706509/Nexus-Toolbox@main/Nexus-Toolbox.user.js
 // ==/UserScript==
 
 (function () {
