@@ -2,7 +2,7 @@
 // @name         Nexus Toolbox(For EU)
 // @name:zh-CN   Nexus Toolbox(For EU)
 // @namespace    goodwe.nexus.toolbox
-// @version      1.0.2
+// @version      1.0.3
 // @description  右下角 ⚙ 打开面板，每个功能都有独立开关，可即时开启/关闭（无需刷新）：库存可用量（自动选组织/自动筛可用量/排序优化）、预留单（隐藏预留数量为0的行/悬停ISO周数/库存状态筛选/默认每页条数）、挪库存（挪用公共库存按钮，含创建→提交→跨库挪单→撤回→删除闭环）、跨库挪单（去除仓库必选限制）、新增预留单（「添加行Beta」：用库存可用量(page)接口跨仓库搜索并加明细行）。设置存本地，并自动继承旧脚本原有设置。
 // @description:zh-CN 右下角 ⚙ 打开面板，每个功能都有独立开关，可即时开启/关闭（无需刷新）：库存可用量（自动选组织/自动筛可用量/排序优化）、预留单（隐藏预留数量为0的行/悬停ISO周数/库存状态筛选/默认每页条数）、挪库存（挪用公共库存按钮，含创建→提交→跨库挪单→撤回→删除闭环）、跨库挪单（去除仓库必选限制）、新增预留单（「添加行Beta」：用库存可用量(page)接口跨仓库搜索并加明细行）。设置存本地，并自动继承旧脚本原有设置。
 // @author       Ryan
@@ -291,7 +291,8 @@
         const tr = bodyRows[index]; if (!tr) return;
         columns.forEach((column, colIndex) => {
           if (!column.prop) return;
-          const cell = tr.children[colIndex];
+          // 类名优先定位（抗列拖拽/隐藏）；类名缺失才退回表头序号
+          const cell = (column.cls && tr.querySelector('.' + column.cls)) || tr.children[colIndex];
           const content = cell?.querySelector('.cell');
           if (content) {
             const nextValue = formatValue(column.prop, row);
@@ -517,7 +518,7 @@
     return `${isoYear}年第${weekNum}周 ${WEEK_TEXT[date.getUTCDay()]}`;
   }
 
-  // 只处理「预计入库时间」列：按表头定位列序号（每次重扫，兼容列拖拽），为单元格写入悬停提示
+  // 只处理「预计入库时间」列：按表头文字定位列（每次重扫，兼容列拖拽/隐藏），为单元格写入悬停提示
   function applyWeekTooltip(win, doc) {
     if (!RESERVATION_RE.test(win.location.href)) return;
 
@@ -531,18 +532,10 @@
     }
 
     doc.querySelectorAll('.el-table').forEach((table) => {
-      const headerTable = table.querySelector('.el-table__header');
       const bodyTable = table.querySelector('.el-table__body');
-      if (!headerTable || !bodyTable) return;
-      const ths = [...headerTable.querySelectorAll('th')];
-      let targetIdx = -1;
-      for (let i = 0; i < ths.length; i++) {
-        const t = ths[i].innerText.replace(/\s+/g, '').trim();
-        if (t.includes('预计入库时间')) { targetIdx = i; break; }
-      }
-      if (targetIdx < 0) return;
+      if (!bodyTable || !columnMap(table).has('预计入库时间')) return;
       bodyTable.querySelectorAll('tbody tr').forEach((tr) => {
-        const td = tr.querySelector(`td:nth-child(${targetIdx + 1})`);
+        const td = cellOf(table, tr, '预计入库时间');
         const cellDiv = td?.querySelector('div.cell');
         if (!cellDiv) return;
         const raw = cellDiv.textContent.trim();
@@ -581,14 +574,64 @@
     });
   }
 
-  function colIndex(table, text) {
-    return [...table.querySelectorAll('thead th')].findIndex((th) => th.textContent.trim() === text);
+  // 列定位：表头文字 → { index, cls, hidden }。
+  // ⚠ 列顺序与显隐由用户在页面上控制（Element Plus 支持拖拽表头、列设置），
+  //    固定下标会串列：例如隐藏「批次号」后 cells[9] 变成「创建人」，把姓名当批次号提交。
+  //    统一用「表头文字 → el-table_N_column_M 类名」定位，类名缺失时才退回表头序号。
+  const COLUMN_MAP_CACHE = new WeakMap();   // .el-table 根元素 → { sig, map }
+
+  function tableRoot(el) {
+    return (el && el.closest && el.closest('.el-table')) || el;
   }
 
-  // 用列类名（el-table_N_column_M）定位单元格，避免固定列/索引错位
+  function columnMap(el) {
+    const root = tableRoot(el);
+    if (!root) return new Map();
+    const header = root.querySelector('.el-table__header') || root;
+    let ths = [...header.querySelectorAll('thead th')];
+    if (!ths.length) ths = [...header.querySelectorAll('th')];   // 兜底：无 thead 的表格
+    const sig = ths.map((th) => th.textContent.replace(/\s+/g, ' ').trim()).join('\u0001');
+    const hit = COLUMN_MAP_CACHE.get(root);
+    if (hit && hit.sig === sig) return hit.map;   // 表头没变就复用；拖拽/显隐后 sig 变化自动重算
+    const map = new Map();
+    ths.forEach((th, index) => {
+      const text = th.textContent.replace(/\s+/g, ' ').trim();
+      if (!text || map.has(text)) return;
+      map.set(text, {
+        index: index,
+        cls: [...th.classList].find((c) => /^el-table_\d+_column_\d+$/.test(c)) || '',
+        hidden: th.getClientRects().length === 0,
+      });
+    });
+    COLUMN_MAP_CACHE.set(root, { sig: sig, map: map });
+    return map;
+  }
+
+  function colIndex(table, text) {
+    const col = columnMap(table).get(text);
+    return col ? col.index : -1;
+  }
+
+  // 用列类名（el-table_N_column_M）定位单元格，避免列拖拽/隐藏导致串列
   function cellClass(table, text) {
-    const th = [...table.querySelectorAll('thead th')].find((t) => t.textContent.trim() === text);
-    return th ? [...th.classList].find((c) => /^el-table_\d+_column_\d+$/.test(c)) || '' : '';
+    const col = columnMap(table).get(text);
+    return col ? col.cls : '';
+  }
+
+  // 取某列的单元格：类名优先（抗拖拽/隐藏），退化到表头序号
+  function cellOf(table, tr, text) {
+    const col = columnMap(table).get(text);
+    if (!col) return null;
+    if (col.cls) {
+      const byCls = tr.querySelector('.' + col.cls);
+      if (byCls) return byCls;
+    }
+    return tr.children[col.index] || null;
+  }
+
+  function cellText(table, tr, text) {
+    const td = cellOf(table, tr, text);
+    return td ? td.innerText.replace(/\s+/g, ' ').trim() : '';
   }
 
   // 行长显隐：同时考虑「库存状态」筛选 与 「预留数量为0」隐藏
@@ -902,26 +945,32 @@
   }
 
   // ---------------- 定位“预留明细”表（带选择框的那张） ----------------
+  // 判据：详情页里只有「预留明细」带「国际仓库」列（上面那张「预留单明细」没有），
+  // 所以认这一个表头就够，不必再靠 cells[0..3] 的固定下标猜。
+  // 兜底：万一「国际仓库」列被隐藏，退到「预留单明细号 + 预留数量」两列同时存在。
+  const DETAIL_TABLE_HEADER = '国际仓库';
+
   function findDetailBody() {
-    const tables = Array.from(document.querySelectorAll('table'));
-    for (const t of tables) {
-      const tr = t.querySelector('tbody tr');
-      if (!tr) continue;
-      const cells = tr.querySelectorAll('td');
-      if (cells.length >= 4) {
-        const hasCb = !!cells[0].querySelector('.el-checkbox, input[type=checkbox]');
-        const c1 = cells[1].innerText.trim();
-        const c3 = cells[3].innerText.trim();
-        if (hasCb && c1 && /^[A-Za-z0-9-]+$/.test(c1) && /^\d+$/.test(c3)) {
-          return { table: t, tbody: t.querySelector('tbody') };
-        }
+    const roots = Array.from(document.querySelectorAll('.el-table'));
+    const pick = (pred) => {
+      for (const root of roots) {
+        if (!pred(columnMap(root))) continue;
+        const tbody = root.querySelector('tbody');
+        if (!tbody || !tbody.querySelector('tr')) continue;
+        return { table: tbody.closest('table') || root, header: root, tbody: tbody };
       }
-    }
-    return null;
+      return null;
+    };
+    return pick((map) => map.has(DETAIL_TABLE_HEADER))
+      || pick((map) => map.has('预留单明细号') && map.has('预留数量'));
   }
 
+  // 勾选列：按 Element Plus 的 selection 列类名定位，列被挪走也不会读错
   function isRowChecked(tr) {
-    const cb = tr.querySelector('td') && tr.querySelector('td').querySelector('.el-checkbox__input, input[type=checkbox]');
+    const selectionTd = tr.querySelector('td.el-table-column--selection')
+      || Array.from(tr.children).find((td) => td.querySelector('.el-checkbox, input[type=checkbox]'));
+    if (!selectionTd) return false;
+    const cb = selectionTd.querySelector('input[type=checkbox], .el-checkbox__input');
     if (!cb) return false;
     if (cb.type === 'checkbox') return cb.checked;
     return cb.className && cb.className.toString().indexOf('is-checked') >= 0;
@@ -1095,25 +1144,36 @@
   }
 
   // 读取某行：返回 { materialNo, reserveQty, model, warehouseName, batchNo }
-  function readRow(tr) {
-    const cells = tr.querySelectorAll('td');
-    const txt = (i) => (cells[i] ? cells[i].innerText.replace(/\s+/g, ' ').trim() : '');
-    return { materialNo: txt(1), model: txt(2), reserveQty: parseInt(txt(3), 10) || 0, warehouseName: txt(5), batchNo: txt(9) };
+  // ⚠ 一律按表头文字 → 列类名读取，不再用固定下标：列被隐藏/拖动后，
+  //    cells[9] 这类取值会变成相邻列（例如把「创建人」当批次号写进建单 body）。
+  function readRow(tr, table) {
+    const t = table || tr.closest('table');
+    if (!t) throw new Error('无法定位“预留明细”表格。');
+    const materialNo = cellText(t, tr, '物料编码');
+    if (!materialNo) throw new Error('「物料编码」列为空或已被隐藏，请先显示该列后再操作。');
+    const qtyText = cellText(t, tr, '预留数量');
+    if (qtyText === '') throw new Error('「预留数量」列为空或已被隐藏，请先显示该列后再操作。');
+    const reserveQty = parseInt(qtyText, 10);
+    if (isNaN(reserveQty)) {
+      throw new Error('「预留数量」列读取失败（当前值：' + qtyText.slice(0, 20) + '），请检查该列是否被隐藏或调整了顺序。');
+    }
+    return {
+      materialNo: materialNo,
+      model: cellText(t, tr, '物料型号'),
+      reserveQty: reserveQty,
+      warehouseName: cellText(t, tr, '国际仓库'),
+      batchNo: cellText(t, tr, '批次号'),
+    };
   }
 
   // 从选中行读取“预留单明细号”列的值（用于 targetItemId）。找不到该列则直接报错，不继续。
-  function getSelectedItemId(tr) {
-    let colIdx = -1;
-    document.querySelectorAll('table').forEach(function (t) {
-      if (colIdx >= 0) return;
-      Array.from(t.querySelectorAll('thead th')).forEach(function (th, i) {
-        if (colIdx < 0 && (th.innerText || '').replace(/\s+/g, ' ').trim() === '预留单明细号') colIdx = i;
-      });
-    });
-    if (colIdx < 0) throw new Error('未找到“预留单明细号”列（可能已被隐藏），请先显示该列后再操作。');
-    const cells = tr.querySelectorAll('td');
-    if (!cells[colIdx]) throw new Error('未找到“预留单明细号”列。');
-    const v = cells[colIdx].innerText.replace(/\s+/g, ' ').trim();
+  // 同样按表头文字 → 列类名定位，列被拖拽/隐藏时不会读到别的列。
+  function getSelectedItemId(tr, table) {
+    const t = table || tr.closest('.el-table') || tr.closest('table');
+    if (!t || !columnMap(t).has('预留单明细号')) {
+      throw new Error('未找到“预留单明细号”列（可能已被隐藏），请先显示该列后再操作。');
+    }
+    const v = cellText(t, tr, '预留单明细号');
     if (!v) throw new Error('“预留单明细号”列为空，无法取得明细行id。');
     return v;
   }
@@ -1441,9 +1501,9 @@
       if (checked.length === 0) { await showAlert('请先在“预留明细”中勾选一行，再点击库存搜索。', 'warn'); return; }
       if (checked.length > 1) { await showAlert('只能勾选一行明细，请取消多选后再点击。', 'warn'); return; }
 
-      const row = readRow(checked[0]);
+      const row = readRow(checked[0], body.table);
       if (!row.materialNo) { await showAlert('无法读取该行的物料编码。', 'warn'); return; }
-      const targetItemId = getSelectedItemId(checked[0]);   // ★ 选中行的“预留单明细号”，找不到会抛错
+      const targetItemId = getSelectedItemId(checked[0], body.table);   // ★ 选中行的“预留单明细号”，找不到会抛错
 
       const product = await getProductInfo(row.materialNo).catch(function () {
         return { productName: '', model: '', warranty: 10, standardWarranty: 10, spareWarranty: 0 };
