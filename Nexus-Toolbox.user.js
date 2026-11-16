@@ -2,9 +2,9 @@
 // @name         Nexus Toolbox(For EU)
 // @name:zh-CN   Nexus Toolbox(For EU)
 // @namespace    goodwe.nexus.toolbox
-// @version      1.0.3
-// @description  右下角 ⚙ 打开面板，每个功能都有独立开关，可即时开启/关闭（无需刷新）：库存可用量（自动选组织/自动筛可用量/排序优化）、预留单（隐藏预留数量为0的行/悬停ISO周数/库存状态筛选/默认每页条数）、挪库存（挪用公共库存按钮，含创建→提交→跨库挪单→撤回→删除闭环）、跨库挪单（去除仓库必选限制）、新增预留单（「添加行Beta」：用库存可用量(page)接口跨仓库搜索并加明细行）。设置存本地，并自动继承旧脚本原有设置。
-// @description:zh-CN 右下角 ⚙ 打开面板，每个功能都有独立开关，可即时开启/关闭（无需刷新）：库存可用量（自动选组织/自动筛可用量/排序优化）、预留单（隐藏预留数量为0的行/悬停ISO周数/库存状态筛选/默认每页条数）、挪库存（挪用公共库存按钮，含创建→提交→跨库挪单→撤回→删除闭环）、跨库挪单（去除仓库必选限制）、新增预留单（「添加行Beta」：用库存可用量(page)接口跨仓库搜索并加明细行）。设置存本地，并自动继承旧脚本原有设置。
+// @version      1.0.4
+// @description  右下角 ⚙ 打开面板，每个功能都有独立开关，可即时开启/关闭（无需刷新）：库存可用量（自动选组织/自动筛可用量/排序优化）、预留单（隐藏预留数量为0的行/悬停ISO周数/库存状态筛选/默认每页条数）、挪库存（挪用公共库存按钮，含创建→提交→跨库挪单→撤回→删除闭环）、跨库挪单（去除仓库必选限制）、新增预留单（「添加行Beta」：用库存可用量(page)接口跨仓库搜索并加明细行，库存组织可选）。设置存本地，并自动继承旧脚本原有设置。
+// @description:zh-CN 右下角 ⚙ 打开面板，每个功能都有独立开关，可即时开启/关闭（无需刷新）：库存可用量（自动选组织/自动筛可用量/排序优化）、预留单（隐藏预留数量为0的行/悬停ISO周数/库存状态筛选/默认每页条数）、挪库存（挪用公共库存按钮，含创建→提交→跨库挪单→撤回→删除闭环）、跨库挪单（去除仓库必选限制）、新增预留单（「添加行Beta」：用库存可用量(page)接口跨仓库搜索并加明细行，库存组织可选）。设置存本地，并自动继承旧脚本原有设置。
 // @author       Ryan
 // @icon         data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCIgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0Ij48cmVjdCB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHJ4PSIxNCIgZmlsbD0iIzQwOWVmZiIvPjxnIHRyYW5zZm9ybT0idHJhbnNsYXRlKDgsOCkgc2NhbGUoMikiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2ZmZmZmZiIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiPjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjMiLz48cGF0aCBkPSJNMTkuNCAxNWExLjY1IDEuNjUgMCAwIDAgLjMzIDEuODJsLjA2LjA2YTIgMiAwIDAgMSAwIDIuODMgMiAyIDAgMCAxLTIuODMgMGwtLjA2LS4wNmExLjY1IDEuNjUgMCAwIDAtMS44Mi0uMzMgMS42NSAxLjY1IDAgMCAwLTEgMS41MVYyMWEyIDIgMCAwIDEtMiAyIDIgMiAwIDAgMS0yLTJ2LS4wOUExLjY1IDEuNjUgMCAwIDAgOSAxOS40YTEuNjUgMS42NSAwIDAgMC0xLjgyLjMzbC0uMDYuMDZhMiAyIDAgMCAxLTIuODMgMCAyIDIgMCAwIDEgMC0yLjgzbC4wNi0uMDZhMS42NSAxLjY1IDAgMCAwIC4zMy0xLjgyIDEuNjUgMS42NSAwIDAgMC0xLjUxLTFIM2EyIDIgMCAwIDEtMi0yIDIgMiAwIDAgMSAyLTJoLjA5QTEuNjUgMS42NSAwIDAgMCA0LjYgOWExLjY1IDEuNjUgMCAwIDAtLjMzLTEuODJsLS4wNi0uMDZhMiAyIDAgMCAxIDAtMi44MyAyIDIgMCAwIDEgMi44MyAwbC4wNi4wNmExLjY1IDEuNjUgMCAwIDAgMS44Mi4zM0g5YTEuNjUgMS42NSAwIDAgMCAxLTEuNTFWM2EyIDIgMCAwIDEgMi0yIDIgMiAwIDAgMSAyIDJ2LjA5YTEuNjUgMS42NSAwIDAgMCAxIDEuNTEgMS42NSAxLjY1IDAgMCAwIDEuODItLjMzbC4wNi0uMDZhMiAyIDAgMCAxIDIuODMgMCAyIDIgMCAwIDEgMCAyLjgzbC0uMDYuMDZhMS42NSAxLjY1IDAgMCAwLS4zMyAxLjgyVjlhMS42NSAxLjY1IDAgMCAwIDEuNTEgMUgyMWEyIDIgMCAwIDEgMiAyIDIgMiAwIDAgMS0yIDJoLS4wOWExLjY1IDEuNjUgMCAwIDAtMS41MSAxeiIvPjwvZz48L3N2Zz4=
 // @match        https://crm.goodwe.com:2001/*
@@ -38,6 +38,7 @@
     'create.addRowBeta': true,     // 新增预留单：「添加行Beta」（用 page 接口跨仓库加明细行）
     // —— 参数项（非开关，不在面板里暴露） ——
     orgName: 'GoodWe Europe GmbH',
+    betaOrgCode: '010501',          // 添加行Beta 的库存组织（弹窗里可切换，默认 EU）
     availMin: '1',
     availMax: '999999',
     defaultMaterial: 'NBG8000-07-00P',
@@ -86,6 +87,27 @@
   const TENANT_ID = '1';
   const ORG_CODE  = '010501';     // 库存可用量接口的 orgCode（与抓包一致）
   const MAX_OFFER = '9999999';    // 可用量筛选上界（与抓包一致）
+
+  // 库存组织（orgCode → 名称），取自「库存可用量」页「库存组织编码」下拉框的实际选项。
+  // 该下拉是前端常量、没有对应接口，所以这里固化成表；改组织时只需改这一处。
+  const ORG_OPTIONS = [
+    { code: '01',     name: '固德威技术股份有限公司' },
+    { code: '0101',   name: '固德威电源科技（广德）有限公司' },
+    { code: '0102',   name: 'GoodWe Power Supply Technology Co., Ltd' },
+    { code: '0103',   name: 'GoodWe Australia Pty.Ltd' },
+    { code: '0106',   name: 'GoodWe Korea Co., Ltd' },
+    { code: '0108',   name: 'GoodWe Usa Inc.' },
+    { code: '0109',   name: 'GoodWe Japan K.K.' },
+    { code: '0124',   name: 'GOODWE SINGAPORE PTE.LTD.' },
+    { code: '010501', name: 'GoodWe Europe GmbH' },
+    { code: '012401', name: 'GOODWE MENA TRADING FZCO' },
+    { code: '012402', name: 'GOODWE GLOBAL TRADE PTE. LTD.' },
+  ];
+
+  function orgNameOf(code) {
+    const hit = ORG_OPTIONS.find((o) => o.code === code);
+    return hit ? hit.name : '';
+  }
 
   const sleep = (win, ms) => new Promise((resolve) => win.setTimeout(resolve, ms));
 
@@ -2145,7 +2167,7 @@
   //   类型：未选 → columnFilters[1]=type IN (在库,在途,在制)；已选 → type=<值>
   //   仓库：warehouseName=<输入值>（不限仓库时不带）
   function buildAddRowBetaUrl(opt) {
-    const p = ['pageNo=' + (opt.pageNo || 1), 'pageSize=' + (opt.pageSize || 10), 'orgCode=' + ORG_CODE];
+    const p = ['pageNo=' + (opt.pageNo || 1), 'pageSize=' + (opt.pageSize || 10), 'orgCode=' + (opt.orgCode || ORG_CODE)];
     p.push('materialNo=' + encodeURIComponent(opt.materialNo || ''));
     if (opt.warehouseName) p.push('warehouseName=' + encodeURIComponent(opt.warehouseName));
     if (opt.batchNo) p.push('batchNo=' + encodeURIComponent(opt.batchNo));
@@ -2209,6 +2231,9 @@
         + '<button data-close type="button" style="border:0;background:none;font-size:20px;line-height:1;cursor:pointer;color:#a8abb2;">&times;</button>'
         + '</div>'
         + '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 16px;background:#fafafa;border-bottom:1px solid #ebeef5;font-size:13px;">'
+        + '<label>库存组织&nbsp;<select data-org style="height:30px;max-width:260px;padding:0 6px;border:1px solid #dcdfe6;border-radius:4px;">'
+        + ORG_OPTIONS.map((o) => '<option value="' + o.code + '">' + escHtml(o.name) + '</option>').join('')
+        + '</select></label>'
         + '<label>物料编码&nbsp;<input data-material placeholder="请输入物料编码" style="width:170px;height:30px;padding:0 8px;border:1px solid #dcdfe6;border-radius:4px;"></label>'
         + '<label>仓库名称&nbsp;<input data-warehouse placeholder="请输入仓库名称" style="width:200px;height:30px;padding:0 8px;border:1px solid #dcdfe6;border-radius:4px;"></label>'
         + '<label>批次号&nbsp;<input data-batch placeholder="批次号（精确匹配）" style="width:170px;height:30px;padding:0 8px;border:1px solid #dcdfe6;border-radius:4px;"></label>'
@@ -2263,6 +2288,11 @@
       let betaTotal = 0;
       function close() { overlay.remove(); }
 
+      // 库存组织：默认取设置里记住的组织，失效则退回 EU
+      const orgSel = box.querySelector('[data-org]');
+      orgSel.value = ORG_OPTIONS.some((o) => o.code === S.betaOrgCode) ? S.betaOrgCode : ORG_CODE;
+      const currentOrgCode = () => orgSel.value || ORG_CODE;
+
       function renderRows(list) {
         betaLastList = list || [];
         const tb = box.querySelector('tbody');
@@ -2275,7 +2305,7 @@
           const tr = doc.createElement('tr');
           tr.style.cssText = 'border-bottom:1px solid #f2f3f5;';
           const cell = (v) => '<td style="padding:8px 10px;white-space:nowrap;">' + escHtml(v == null ? '' : v) + '</td>';
-          const orgText = (rec.orgCode === ORG_CODE && S.orgName) ? S.orgName : (rec.orgCode || '');
+          const orgText = orgNameOf(rec.orgCode) || rec.orgCode || '';
           tr.innerHTML =
             '<td style="padding:8px 10px;"><input type="checkbox" style="cursor:pointer;"></td>'
             + cell(rec.materialNo) + '<td style="padding:8px 10px;white-space:nowrap;" data-name></td>'
@@ -2321,6 +2351,7 @@
         const tb = box.querySelector('tbody');
         tb.innerHTML = '<tr><td colspan="15" style="padding:24px;text-align:center;color:#909399;">查询中…</td></tr>';
         const url = buildAddRowBetaUrl({
+          orgCode: currentOrgCode(),
           materialNo: box.querySelector('[data-material]').value.trim(),
           warehouseName: box.querySelector('[data-warehouse]').value.trim(),
           batchNo: box.querySelector('[data-batch]').value.trim(),
@@ -2358,6 +2389,15 @@
         betaPageSize = Number(e.target.value) || 10;
         betaPage = 1;
         load(true);
+      });
+      // 切换库存组织：记住选择并重新查询（换组织后原来勾选的行不再适用，清空）
+      box.querySelector('[data-org]').addEventListener('change', function (e) {
+        S.betaOrgCode = e.target.value;
+        saveSettings();
+        betaPage = 1;
+        selected.clear();
+        updateCount();
+        load(false);
       });
       box.querySelector('[data-prev]').addEventListener('click', function () {
         if (betaPage > 1) { betaPage--; load(true); }
