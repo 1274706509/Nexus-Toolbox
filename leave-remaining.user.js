@@ -1,28 +1,249 @@
 // ==UserScript==
-// @name         调休假可用时数查询
+// @name         调休剩余时数
 // @namespace    https://goodwe.gaiaworkforce.com/
 // @version      1.0.0
-// @description  在请假申请页的“请假类型”旁直接显示 A02 调休假可用时数（默认按今天起算，计算后恢复表单）
+// @description  首页显示调休剩余时数；请假表单内联显示，后台自动计算
+// @match        https://goodwe.gaiaworkforce.com/head/HR1Main.html*
 // @match        https://goodwe.gaiaworkforce.com/eFlow/FlowForm/LeaveFormFrm.aspx*
 // @grant        none
 // @run-at       document-idle
+// @updateURL    https://cdn.jsdelivr.net/gh/1274706509/Nexus-Toolbox@main/leave-remaining.meta.js
+// @downloadURL  https://cdn.jsdelivr.net/gh/1274706509/Nexus-Toolbox@main/leave-remaining.user.js
 // ==/UserScript==
 
+/* ==================================================================== *
+ * 首页模式：在顶部用户信息旁显示调休剩余时数
+ * ==================================================================== */
 (function () {
   'use strict';
+  if (!/\/head\/HR1Main\.html/.test(location.pathname)) return;
+
+  const CACHE_PREFIX = 'a02_leave_threshold_v1';
+  const CACHE_TTL = 30 * 60 * 1000;
+  const BADGE_ID = 'leave-remaining-badge';
+  const HIDDEN_ID = 'leave-remaining-hidden-form';
+  const LEAVE_URL = 'https://goodwe.gaiaworkforce.com/eFlow/FlowForm/LeaveFormFrm.aspx?ProcessID=PROCESSLEAVEFORM&RandomStr=';
+
+  let running = false;
+
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  function pad2(n) {
+    return String(n).padStart(2, '0');
+  }
+
+  function ymd(d) {
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+  }
+
+  function defaultBasis() {
+    const d = new Date();
+    while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+    return ymd(d);
+  }
+
+  function nowStr() {
+    const d = new Date();
+    return d.getFullYear() + '/' + pad2(d.getMonth() + 1) + '/' + pad2(d.getDate()) +
+      ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds());
+  }
+
+  function readEmployeeId() {
+    const ps = document.querySelectorAll('.user p');
+    for (const p of ps) {
+      const t = (p.textContent || '').trim();
+      if (/^[A-Za-z0-9_-]{3,20}$/.test(t) && t !== '陈洪园') return t;
+    }
+    return null;
+  }
+
+  function ensureBadge() {
+    let b = document.getElementById(BADGE_ID);
+    if (b) return b;
+
+    const head = document.querySelector('.head-content');
+    if (!head) return null;
+
+    b = document.createElement('span');
+    b.id = BADGE_ID;
+    b.style.cssText = [
+      'position:absolute',
+      'right:175px',
+      'top:11px',
+      'height:28px',
+      'line-height:28px',
+      'padding:0 12px',
+      'border-radius:14px',
+      'background:#fff',
+      'color:#3d8b1f',
+      'font-size:12px',
+      'font-weight:600',
+      'font-family:"Microsoft YaHei",Arial,sans-serif',
+      'box-shadow:0 2px 6px rgba(0,0,0,.15)',
+      'cursor:pointer',
+      'white-space:nowrap',
+      'user-select:none'
+    ].join(';');
+    b.title = '点击重新计算';
+    b.addEventListener('click', () => {
+      if (!running) refresh();
+    });
+    head.appendChild(b);
+    return b;
+  }
+
+  function setBadge(text, color, title) {
+    const b = ensureBadge();
+    if (!b) return;
+    b.textContent = text;
+    b.style.color = color || '#3d8b1f';
+    if (title !== undefined) b.title = title;
+  }
+
+  function readCache() {
+    let best = null;
+    const empId = readEmployeeId();
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (!k || !k.startsWith(CACHE_PREFIX + ':')) continue;
+        const parts = k.split(':');
+        if (empId && parts[1] !== empId) continue;
+        const obj = JSON.parse(localStorage.getItem(k));
+        if (obj && Number.isFinite(obj.threshold) && Date.now() - obj.ts < CACHE_TTL) {
+          if (!best || obj.ts > best.ts) best = obj;
+        }
+      }
+    } catch (e) { /* ignore */ }
+    return best;
+  }
+
+  function clearCache() {
+    try {
+      const keys = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith(CACHE_PREFIX + ':')) keys.push(k);
+      }
+      keys.forEach((k) => localStorage.removeItem(k));
+    } catch (e) { /* ignore */ }
+  }
+
+  function waitFor(fn, timeoutMs, intervalMs) {
+    return new Promise((resolve) => {
+      const t0 = Date.now();
+      const tick = () => {
+        let v = null;
+        try { v = fn(); } catch (e) { /* ignore */ }
+        if (v) return resolve(v);
+        if (Date.now() - t0 >= timeoutMs) return resolve(null);
+        setTimeout(tick, intervalMs || 300);
+      };
+      tick();
+    });
+  }
+
+  async function calcHidden() {
+    const old = document.getElementById(HIDDEN_ID);
+    if (old) old.remove();
+
+    const ifr = document.createElement('iframe');
+    ifr.id = HIDDEN_ID;
+    // 放到屏幕外，但保持正常渲染（不用 display:none，避免 Ext 布局失效）
+    ifr.style.cssText = 'position:fixed;left:-12000px;top:0;width:1200px;height:900px;visibility:hidden;';
+    ifr.src = LEAVE_URL + encodeURIComponent(nowStr());
+    document.body.appendChild(ifr);
+
+    try {
+      const combo = await waitFor(() => {
+        const w = ifr.contentWindow;
+        if (!w || !w.Ext) return null;
+        const c = w.Ext.getCmp('panel__ctl2__ctl0_gpDetail_frmDetail__ctl0_ddlLeaveType');
+        return c && c.store && c.store.getCount() > 0 ? c : null;
+      }, 25000, 300);
+
+      if (!combo) return null;
+
+      const d = ifr.contentDocument;
+      const lt = d.querySelector('[id$="ddlLeaveType-inputEl"]');
+      const isA02 = lt && (/A02/.test(lt.value || '') || /调休假/.test(lt.value || ''));
+
+      if (!isA02) {
+        const rec = combo.store.findRecord('value', '2');
+        combo.setValue('2');
+        combo.fireEvent('select', combo, rec);
+      }
+
+      const t0 = Date.now();
+      while (Date.now() - t0 < 60000) {
+        await sleep(500);
+        let dd = null;
+        try { dd = ifr.contentDocument; } catch (e) { continue; }
+        const el = dd && dd.getElementById('leave-remaining-inline');
+        if (!el) continue;
+        const m = (el.textContent || '').match(/调休剩余\s*(\d+(?:\.\d+)?)\s*小时/);
+        if (m) return Number(m[1]);
+      }
+      return null;
+    } finally {
+      setTimeout(() => {
+        try { ifr.remove(); } catch (e) { /* ignore */ }
+      }, 800);
+    }
+  }
+
+  async function refresh() {
+    if (running) return;
+    running = true;
+
+    clearCache();
+    setBadge('正在计算调休时数', '#6b7a90', '正在后台计算，请稍候…');
+
+    const threshold = await calcHidden();
+    running = false;
+
+    if (Number.isFinite(threshold)) {
+      setBadge('调休剩余 ' + threshold + ' 小时', '#3d8b1f',
+        '按 ' + defaultBasis() + ' 09:00 起算；点击重新计算');
+    } else {
+      setBadge('调休时数获取失败', '#d46b08', '点击重试');
+    }
+  }
+
+  async function main() {
+    const head = await waitFor(() => document.querySelector('.head-content'), 15000, 300);
+    if (!head) return;
+
+    ensureBadge();
+
+    // 30 分钟内已有结果，直接显示，不再加载隐藏表单
+    const cached = readCache();
+    if (cached) {
+      setBadge('调休剩余 ' + cached.threshold + ' 小时', '#3d8b1f',
+        '按 ' + defaultBasis() + ' 09:00 起算；点击重新计算');
+      return;
+    }
+
+    refresh();
+  }
+
+  main();
+})();
+
+/* ==================================================================== *
+ * 请假表单模式：计算并在“请假类型”右侧显示调休剩余时数
+ * ==================================================================== */
+(function () {
+  'use strict';
+  if (!/\/eFlow\/FlowForm\/LeaveFormFrm\.aspx/.test(location.pathname)) return;
 
   /* ------------------------------------------------------------------ *
-   * 说明
-   * ------------------------------------------------------------------
-   * A02 调休假的“没有足够的时数”提示，只有当请假时数 > 当前可用时数时才出现。
-   * 可用时数没有直接显示在页面上，所以这里用二分法探测：
-   *   固定“起算日”（默认今天 09:00），构造 1~N 小时的请假区间，
+   * 调休余额没有直接显示，用二分法探测：
+   *   固定起算日（默认今天 09:00），构造 1~N 小时的请假区间，
    *   通过日期/时间字段的 blur 回发让服务端重新计算，
-   *   读取 panel_cpLateMsg 是否显示，找到“刚好不报错”的最大整小时数。
+   *   读取报错面板是否显示，找到“刚好不报错”的最大整小时数。
    *
-   * 计算期间会在表单上覆盖一层加载遮罩，并临时改动日期；计算结束后自动恢复原日期。
-   * 结果直接显示在“请假类型”下拉框右侧，不额外弹窗。
-   * 调休假有时效，阈值会随起算日变化；脚本默认按今天计算。
+   * 计算期间会用加载遮罩挡住临时改动的日期，结束后自动恢复原表单。
    * ------------------------------------------------------------------ */
 
   const PARAM = {
@@ -32,7 +253,6 @@
     et: 'panel:_ctl2:_ctl0:gpDetail:frmDetail:_ctl5:Form3:_ctl0:tpTimeT'
   };
 
-  // Ext 组件 id（下划线格式）
   const CMP = {
     sd: 'panel__ctl2__ctl0_gpDetail_frmDetail__ctl4_Form2__ctl0_dpDateF',
     st: 'panel__ctl2__ctl0_gpDetail_frmDetail__ctl4_Form2__ctl0_tpTimeF',
@@ -40,7 +260,6 @@
     et: 'panel__ctl2__ctl0_gpDetail_frmDetail__ctl5_Form3__ctl0_tpTimeT'
   };
 
-  // DOM input id（下划线 + -inputEl）
   const EL = {
     sd: CMP.sd + '-inputEl',
     st: CMP.st + '-inputEl',
@@ -51,18 +270,16 @@
     leaveTypeBody: 'panel__ctl2__ctl0_gpDetail_frmDetail__ctl0_ddlLeaveType-bodyEl'
   };
 
-  const MAX_HOURS = 240;            // 探测上限
-  const CACHE_TTL = 30 * 60 * 1000; // 缓存 30 分钟
+  const MAX_HOURS = 240;
+  const CACHE_TTL = 30 * 60 * 1000;
   const CACHE_PREFIX = 'a02_leave_threshold_v1';
-  const INLINE_ID = 'a02-inline-threshold';
-  const OVERLAY_ID = 'a02-threshold-overlay';
+  const INLINE_ID = 'leave-remaining-inline';
+  const OVERLAY_ID = 'leave-remaining-overlay';
 
   let running = false;
   let currentBasis = null;
   let currentThreshold = null;
   let lastAutoKey = null;
-
-  /* ---------------------------- 工具 ---------------------------- */
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -140,46 +357,22 @@
   }
 
   function defaultBasis() {
-    // 默认按今天；如果今天是周末，顺延到下一个工作日
     return ymd(nextWorkday(new Date()));
   }
 
-  /* ---------------------------- 构造探测区间 ---------------------------- */
-
-  /**
-   * 生成“请 H 小时”的起止时间。
-   *
-   * 系统规则：
-   *  - 跨天请假时，结束时间会被服务端强制为 18:00；
-   *  - 所以 H > 8 时，用“第一天少上几小时 + 之后若干整天”的方式凑出 H。
-   *
-   * 例：H=10 → 09:00 开始改为 16:00，结束为次日 18:00（第一天 2h + 第二天 8h）。
-   */
   function makePlan(H, basisYmd) {
     if (H <= 8) {
-      const off = H + (H >= 4 ? 1 : 0); // 12:00-13:00 午休
-      return {
-        sd: basisYmd,
-        st: '09:00',
-        ed: basisYmd,
-        et: pad2(9 + off) + ':00'
-      };
+      const off = H + (H >= 4 ? 1 : 0);
+      return { sd: basisYmd, st: '09:00', ed: basisYmd, et: pad2(9 + off) + ':00' };
     }
 
-    const p = H % 8 === 0 ? 8 : H % 8;                     // 第一天的小时数 1..8
-    const k = H % 8 === 0 ? H / 8 - 1 : Math.floor(H / 8);  // 之后还有几个整天
-    const stHour = p >= 5 ? 17 - p : 18 - p;                // 第一天开始时间
+    const p = H % 8 === 0 ? 8 : H % 8;
+    const k = H % 8 === 0 ? H / 8 - 1 : Math.floor(H / 8);
+    const stHour = p >= 5 ? 17 - p : 18 - p;
     const end = addWorkdays(parseYmd(basisYmd), k);
 
-    return {
-      sd: basisYmd,
-      st: pad2(stHour) + ':00',
-      ed: ymd(end),
-      et: '18:00'
-    };
+    return { sd: basisYmd, st: pad2(stHour) + ':00', ed: ymd(end), et: '18:00' };
   }
-
-  /* ---------------------------- 表单操作 / 回发 ---------------------------- */
 
   function readFormValues() {
     return {
@@ -223,7 +416,7 @@
       await sleep(150);
       const vs = getViewState();
       if (vs && vs !== before) {
-        await sleep(350); // 等 FineUI 把面板/时数渲染完
+        await sleep(350);
         return;
       }
     }
@@ -254,8 +447,6 @@
     return true;
   }
 
-  /* ---------------------------- 二分探测 ---------------------------- */
-
   async function computeThreshold(basisYmd, onProgress) {
     const memo = new Map();
     let probes = 0;
@@ -271,13 +462,11 @@
       return r;
     }
 
-    // 1 小时就超限 → 阈值为 0
     const first = await test(1);
     if (first.fail) {
       return { threshold: 0, probes, exact: first.hour === 1 && !inexact };
     }
 
-    // 指数增长找上界
     let lo = 1;
     let hi = 2;
     let foundFail = false;
@@ -297,7 +486,6 @@
       return { threshold: MAX_HOURS, probes, capped: true, exact: !inexact };
     }
 
-    // 二分到 1 小时
     while (hi - lo > 1) {
       const mid = Math.floor((lo + hi) / 2);
       const r = await test(mid);
@@ -307,8 +495,6 @@
 
     return { threshold: lo, probes, exact: !inexact };
   }
-
-  /* ---------------------------- 缓存 ---------------------------- */
 
   function cacheKey(empId, basisYmd) {
     return CACHE_PREFIX + ':' + empId + ':' + basisYmd;
@@ -336,8 +522,6 @@
     } catch (e) { /* ignore */ }
   }
 
-  /* ---------------------------- 内联显示 ---------------------------- */
-
   function ensureInline() {
     const body = document.getElementById(EL.leaveTypeBody);
     if (!body) return null;
@@ -358,7 +542,7 @@
         'cursor:pointer',
         'user-select:none'
       ].join(';');
-      el.title = '点击按今天重新计算';
+      el.title = '点击重新计算';
       el.addEventListener('click', () => {
         if (!running && isA02()) run(defaultBasis(), true);
       });
@@ -383,42 +567,26 @@
     if (el) el.style.display = 'none';
   }
 
-  function updateInline(hint) {
+  function updateInline() {
     if (!isA02()) {
       hideInline();
       return;
     }
 
     if (currentThreshold === null) {
-      setInline(running ? '计算中…' : '—', '#8c98a8', '');
+      setInline(running ? '正在计算调休时数' : '调休剩余 -- 小时', '#8c98a8', '');
       return;
     }
 
-    const h = Number(readHour());
-    let text = '可用 ' + currentThreshold + ' 小时';
-    let color = '#389e0d';
-
-    if (Number.isFinite(h) && h > currentThreshold) {
-      text += '（超出 ' + (h - currentThreshold) + '）';
-      color = '#cf1322';
-    }
-    if (hint) text += hint;
-
-    setInline(text, color, '按 ' + currentBasis + ' 09:00 起算；点击可重新计算');
+    setInline('调休剩余 ' + currentThreshold + ' 小时', '#389e0d',
+      '按 ' + currentBasis + ' 09:00 起算；点击重新计算');
   }
 
-  function renderThreshold(basisYmd, threshold, meta) {
+  function renderThreshold(basisYmd, threshold) {
     currentBasis = basisYmd;
     currentThreshold = threshold;
-
-    let hint = '';
-    if (meta && meta.capped) hint = '（上限）';
-    if (meta && meta.exact === false) hint += '（近似）';
-
-    updateInline(hint);
+    updateInline();
   }
-
-  /* ---------------------------- 加载遮罩 ---------------------------- */
 
   function showOverlay() {
     const old = document.getElementById(OVERLAY_ID);
@@ -441,23 +609,21 @@
     ].join(';');
     el.innerHTML =
       '<div style="text-align:center;padding:16px 24px;border:1px solid #d9e2ef;border-radius:10px;background:#fff;box-shadow:0 8px 30px rgba(15,35,70,.16);">' +
-      '<div style="font-size:15px;font-weight:600;color:#0b4a8f;margin-bottom:4px;">正在计算可用时数…</div>' +
-      '<div id="a02-overlay-sub" style="font-size:12px;color:#6b7a90;">请稍候，计算完成后会自动恢复表单</div>' +
+      '<div style="font-size:15px;font-weight:600;color:#0b4a8f;margin-bottom:4px;">正在计算调休时数…</div>' +
+      '<div id="leave-remaining-overlay-sub" style="font-size:12px;color:#6b7a90;">请稍候，计算完成后会自动恢复表单</div>' +
       '</div>';
     document.body.appendChild(el);
     return el;
   }
 
   function updateOverlay(text) {
-    const s = document.getElementById('a02-overlay-sub');
+    const s = document.getElementById('leave-remaining-overlay-sub');
     if (s) s.textContent = text;
   }
 
   function removeOverlay(el) {
     if (el && el.parentNode) el.parentNode.removeChild(el);
   }
-
-  /* ---------------------------- 主流程 ---------------------------- */
 
   async function run(basisYmd, force) {
     if (running) return;
@@ -476,7 +642,7 @@
     if (!force) {
       const cached = readCache(empId, basisYmd);
       if (cached) {
-        renderThreshold(basisYmd, cached.threshold, {});
+        renderThreshold(basisYmd, cached.threshold);
         running = false;
         return;
       }
@@ -487,7 +653,7 @@
     window.alert = function () {};
 
     const overlay = showOverlay();
-    setInline('计算中…', '#1677ff', '正在探测可用时数');
+    setInline('正在计算调休时数', '#1677ff', '正在探测可用时数');
     updateOverlay('起算日 ' + basisYmd + ' 09:00');
 
     let meta = null;
@@ -496,14 +662,12 @@
 
     try {
       meta = await computeThreshold(basisYmd, (n, H) => {
-        const msg = '第 ' + n + ' 次探测（' + H + ' 小时）…';
-        updateOverlay(msg);
+        updateOverlay('第 ' + n + ' 次探测（' + H + ' 小时）…');
       });
     } catch (e) {
       error = e;
     }
 
-    // 无论成功与否，都尽量恢复原表单
     try {
       restored = await restoreFormValues(saved);
       if (!restored) {
@@ -519,14 +683,14 @@
 
     if (meta) {
       writeCache(empId, basisYmd, meta.threshold);
-      renderThreshold(basisYmd, meta.threshold, meta);
+      renderThreshold(basisYmd, meta.threshold);
       if (!restored) {
-        setInline('可用 ' + meta.threshold + ' 小时（表单未恢复）', '#d46b08',
+        setInline('调休剩余 ' + meta.threshold + ' 小时（表单未恢复）', '#d46b08',
           '表单未能自动恢复，请检查日期');
       }
     } else {
       const msg = error && error.message ? error.message : String(error || '未知错误');
-      setInline('阈值计算失败', '#d46b08', msg + '；点击重试');
+      setInline('调休时数获取失败', '#d46b08', msg + '；点击重试');
     }
 
     running = false;
@@ -551,14 +715,14 @@
       lastAutoKey = key;
       const cached = readCache(empId, basis);
       if (cached) {
-        renderThreshold(basis, cached.threshold, {});
+        renderThreshold(basis, cached.threshold);
       } else {
         run(basis, false);
       }
       return;
     }
 
-    if (!running) updateInline('');
+    if (!running) updateInline();
   }
 
   async function waitForReady(timeoutMs) {
@@ -585,7 +749,6 @@
       hideInline();
     }
 
-    // 处理假别切换、时数变化、FineUI 局部重绘后内联元素被移除
     setInterval(tick, 1500);
   }
 
