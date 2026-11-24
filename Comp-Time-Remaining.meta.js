@@ -9,5 +9,5 @@
 // @match        https://goodwe.gaiaworkforce.com/eFlow/FlowForm/LeaveFormFrm.aspx*
 // @grant        none
 // @run-at       document-idle
-// @downloadURL  https://cdn.jsdelivr.net/gh/1274706509/Nexus-Toolbox@main/leave-remaining.user.js
+// @downloadURL  https://cdn.jsdelivr.net/gh/1274706509/Nexus-Toolbox@main/Comp-Time-Remaining.user.js
 // ==/UserScript==
