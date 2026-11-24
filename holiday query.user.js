@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         调休假可用时数查询
 // @namespace    https://goodwe.gaiaworkforce.com/
-// @version      2.0.0
+// @version      1.0.0
 // @description  在请假申请页的“请假类型”旁直接显示 A02 调休假可用时数（默认按今天起算，计算后恢复表单）
 // @match        https://goodwe.gaiaworkforce.com/eFlow/FlowForm/LeaveFormFrm.aspx*
 // @grant        none
